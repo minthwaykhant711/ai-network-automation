@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic>=2.9
+openai
+Jinja2==3.1.6
+confluent-kafka
+paramiko==3.5.1
+pillow
+python-dotenv
+requests

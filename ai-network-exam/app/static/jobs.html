@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Monitor</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>AI Network Automation <small>Job monitor</small></h1>
+  <nav><a href="/">Workflow</a><a href="/jobs" class="active">Job monitor</a></nav>
+  <div class="health"><span id="refresh">auto-refresh 5 s</span></div>
+</header>
+<main>
+<section class="card">
+  <h2>Deployment jobs</h2>
+  <table class="grid" id="jobs"><thead><tr><th>Status</th><th>Job</th><th>Routers</th><th>Created</th><th>Started</th><th>Finished</th><th>Stage</th></tr></thead><tbody></tbody></table>
+</section>
+<section class="card" id="detail" hidden></section>
+</main>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const t = (s) => s ? s.replace("T", " ").slice(0, 19) : "—";
+let selected = new URLSearchParams(location.search).get("job");
+const openDetails = new Set();
+
+async function load() {
+  const jobs = await (await fetch("/api/jobs")).json();
+  if (!selected && jobs.length) selected = jobs[0].id;
+  $("#jobs tbody").innerHTML = jobs.map((j) => `<tr class="click ${j.id === selected ? "sel" : ""}" data-id="${esc(j.id)}">
+    <td><span class="badge b-${esc(j.status)}">${esc(j.status)}</span></td><td><code>${esc(j.id.slice(0, 8))}</code></td>
+    <td>${esc((j.devices || []).join(", "))}</td><td>${t(j.created_at)}</td><td>${t(j.started_at)}</td><td>${t(j.finished_at)}</td>
+    <td>${esc(j.stage)}${j.error ? ` <span class="mark-bad">— ${esc(j.error.slice(0, 90))}</span>` : ""}</td></tr>`).join("") ||
+    `<tr><td colspan="7" class="sep">No jobs yet</td></tr>`;
+  if (selected) await detail(selected);
+}
+
+function check(ok, label) { return `<li class="${ok ? "mark-ok" : "mark-bad"}">${ok ? "✔" : "✘"} ${label}</li>`; }
+
+async function detail(id) {
+  const r = await fetch(`/api/jobs/${id}`); if (!r.ok) return;
+  const j = await r.json();
+  document.querySelectorAll("#detail details[open]").forEach((d) => openDetails.add(d.dataset.k));
+  document.querySelectorAll("#detail details:not([open])").forEach((d) => openDetails.delete(d.dataset.k));
+  const det = (k, title, body) => `<details data-k="${k}" ${openDetails.has(k) ? "open" : ""}><summary>${title}</summary>${body}</details>`;
+  const routers = j.devices.map((d) => {
+    const rr = j.router_results[d] || {}; const v = j.verification[d];
+    let checks = "";
+    if (v) {
+      checks = `<ul class="checks">` +
+        check(v.neighbor_full, `OSPF neighbor FULL ${esc(Object.entries(v.neighbors_full || {}).map(([n, i]) => `${n} on ${i}`).join(", "))}`) +
+        check((v.remote_networks_missing || []).length === 0, `remote networks via OSPF: ${esc((v.remote_networks_expected || []).join(", "))}${(v.remote_networks_missing || []).length ? " — missing " + esc(v.remote_networks_missing.join(", ")) : ""}`) +
+        check(v.ospf_process_ok, "OSPF process running") + check(v.router_id_ok, "router ID correct") +
+        check(!(v.static_routes_found || []).length, "no static routes replace OSPF") +
+        (v.ping_remote_pcs || []).map((p) => `<li class="${p.success_percent > 0 ? "mark-ok" : "mark-warn"}">${p.success_percent > 0 ? "✔" : "⚠"} ping ${esc(p.target)} from ${esc(d)}: ${esc(p.success_percent ?? "")}% (info)</li>`).join("") +
+        (v.problems || []).map((p) => `<li class="mark-bad">✘ ${esc(p)}</li>`).join("") + `</ul>` +
+        det(`${d}-nbr`, "show ip ospf neighbor", `<pre>${esc(v.show_ip_ospf_neighbor)}</pre>`) +
+        det(`${d}-rte`, "show ip route ospf", `<pre>${esc(v.show_ip_route_ospf)}</pre>`) +
+        det(`${d}-pro`, "show ip protocols", `<pre>${esc(v.show_ip_protocols)}</pre>`);
+    }
+    return `<div class="rtr"><div class="rtr-head"><b>${esc(d)}</b> <span>${esc(rr.host || "")}</span>${rr.error ? `<span class="mark-bad">✘ ${esc(rr.error)}</span>` : ""}${(rr.ios_errors || []).length ? `<span class="mark-bad">IOS errors: ${esc(rr.ios_errors.join("; "))}</span>` : ""}</div>
+      ${rr.configuration_output ? det(`${d}-out`, "Deployment output", `<pre>${esc(rr.configuration_output)}</pre>`) : ""}
+      ${rr.backup_running_config ? det(`${d}-bak`, "Backup: running-config before change", `<pre>${esc(rr.backup_running_config)}</pre>`) : ""}
+      <h3>Verification</h3>${checks || '<span class="sep">not run yet</span>'}</div>`;
+  }).join("");
+  const hist = (j.history || []).map((h) => `<div>${t(h.at)} <b>${esc(h.status)}</b> ${esc(h.stage)}${h.device ? " [" + esc(h.device) + "]" : ""} ${esc(h.message)}</div>`).join("");
+  $("#detail").hidden = false;
+  $("#detail").innerHTML = `<h2>Job <code>${esc(j.id)}</code> <span class="badge b-${esc(j.status)}">${esc(j.status)}</span></h2>
+    <p>Plan <code>${esc(j.plan_id)}</code> · routers ${esc(j.devices.join(", "))} · created ${t(j.created_at)} · started ${t(j.started_at)} · finished ${t(j.finished_at)} · worker ${esc(j.worker_id || "—")}</p>
+    ${j.error ? `<p class="mark-bad">✘ ${esc(j.error)}</p>` : ""}
+    ${j.status === "FAILED" ? `<p><button id="revoke">Revoke approval (plan back to DRAFT)</button> Recovery: <code>.venv/bin/python worker.py --rollback ${esc(j.plan_id)}</code></p>` : ""}
+    <h3>Timeline</h3><div class="timeline">${hist}</div>
+    ${det("kafka", "Kafka message", `<pre>${esc(JSON.stringify({ kafka: j.kafka, message: j.kafka_message }, null, 2))}</pre>`)}
+    ${routers}
+    ${det("raw", "Raw job JSON", `<pre>${esc(JSON.stringify(j, null, 2))}</pre>`)}`;
+  const rv = $("#revoke");
+  if (rv) rv.onclick = async () => {
+    if (!confirm("Revoke the approval of this plan?")) return;
+    const r = await fetch(`/api/jobs/${j.id}/revoke`, { method: "POST" }); alert(r.ok ? "Plan returned to DRAFT" : await r.text()); load();
+  };
+}
+
+$("#jobs").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-id]"); if (!tr) return;
+  selected = tr.dataset.id; history.replaceState(null, "", `/jobs?job=${selected}`); load();
+});
+load(); setInterval(load, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{#- Cisco IOS interface + OSPFv2 configuration for one router.
+    Inputs come from a validated plan; the management interface is never rendered here. -#}
+configure terminal
+no router ospf {{ process_id }}
+{% for intf in interfaces -%}
+interface {{ intf.name }}
+ip address {{ intf.address }} {{ intf.netmask }}
+no shutdown
+exit
+{% endfor -%}
+router ospf {{ process_id }}
+router-id {{ router_id }}
+{% for name in passive -%}
+passive-interface {{ name }}
+{% endfor -%}
+{% for name in active -%}
+no passive-interface {{ name }}
+{% endfor -%}
+{% for net in networks -%}
+network {{ net.address }} {{ net.wildcard }} area {{ area }}
+{% endfor -%}
+end

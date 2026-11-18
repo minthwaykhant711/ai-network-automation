@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Network Automation</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>AI Network Automation <small>OSPF</small></h1>
+  <nav><a href="/" class="active">Workflow</a><a href="/jobs">Job monitor</a></nav>
+  <div id="health" class="health"></div>
+</header>
+<main>
+
+<section class="card">
+  <h2><span class="num">1</span> Upload diagram</h2>
+  <div class="row">
+    <input type="file" id="file" accept="image/png,image/jpeg">
+    <button id="btnGenerate" class="primary" disabled>Generate</button>
+    <span class="sep">or resume</span>
+    <select id="resume"><option value="">— previous plan —</option></select>
+  </div>
+  <div class="preview-wrap"><img id="preview" alt="" hidden></div>
+  <div id="genStatus" class="status"></div>
+</section>
+
+<section class="card" id="secAnalysis" hidden>
+  <h2><span class="num">2</span> AI analysis <small id="planMeta"></small></h2>
+  <div id="notes"></div>
+  <details><summary>Structured JSON (current plan)</summary><pre id="jsonView"></pre></details>
+  <details><summary>Raw model output (before post-processing)</summary><pre id="rawView"></pre></details>
+</section>
+
+<section class="card" id="secEdit" hidden>
+  <h2><span class="num">3</span> Review &amp; resolve</h2>
+  <div id="ambiguities"></div>
+  <div id="routers"></div>
+  <h3>PCs <small>(optional — configured by hand on VPCS; values are only checked)</small></h3>
+  <table class="grid" id="pcTable"><thead><tr><th>Name</th><th>IPv4/prefix</th><th>Gateway</th><th></th></tr></thead><tbody></tbody></table>
+  <div class="row">
+    <button id="btnAddPc">Add PC</button>
+    <button id="btnDiscover">Discover router interfaces</button>
+    <button id="btnSave" class="primary" disabled>Save changes</button>
+    <span id="editStatus" class="status inline"></span>
+  </div>
+</section>
+
+<section class="card" id="secReview" hidden>
+  <h2><span class="num">4</span> Review, validate &amp; approve</h2>
+  <div class="row">
+    <button id="btnReview">Review commands</button>
+    <button id="btnValidate">Validate</button>
+    <span id="reviewStatus" class="status inline"></span>
+  </div>
+  <div id="commands" class="cmds"></div>
+  <div id="validation"></div>
+  <div class="approve-box">
+    <label><input type="checkbox" id="chkApprove"> I reviewed the proposed configuration and approve it for deployment.</label>
+    <div class="row">
+      <input id="approver" placeholder="Administrator name" value="administrator">
+      <input id="adminToken" type="password" placeholder="Admin token" hidden>
+      <button id="btnApprove" class="primary" disabled>Approve</button>
+      <span id="approveStatus" class="status inline"></span>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="secDeploy" hidden>
+  <h2><span class="num">5</span> Deploy</h2>
+  <div class="row">
+    <button id="btnDeploy" class="danger" disabled>Deploy</button>
+    <span id="deployStatus" class="status inline"></span>
+  </div>
+  <div id="jobBox"></div>
+</section>
+
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

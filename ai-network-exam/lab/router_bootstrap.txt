@@ -1,0 +1,21 @@
+! One-time management bootstrap, typed by the operator on each router console (R2: hostname R2).
+! Afterwards ALL data-plane configuration is done by the system (Kafka -> worker -> Paramiko).
+configure terminal
+hostname R1
+no ip domain-lookup
+ip domain-name lab.local
+username admin privilege 15 secret <choose-a-password>
+crypto key generate rsa modulus 2048
+ip ssh version 2
+interface FastEthernet0/0
+ description MANAGEMENT_DHCP
+ ip address dhcp
+ no shutdown
+ exit
+line vty 0 4
+ login local
+ transport input ssh
+ exit
+end
+write memory
+! Do NOT "write memory" after automated deployments: a reload then restores this clean state.
